@@ -361,6 +361,8 @@ ground_truth_files_list.sort()
 gt_counter_per_class = {}
 counter_images_per_class = {}
 
+# added by HSQ
+# TODO:增加可以直接读voc格式的json
 for txt_file in ground_truth_files_list:
     #print(txt_file)
     file_id = txt_file.split(".txt", 1)[0]
@@ -500,6 +502,9 @@ lamr_dictionary = {}
 with open(results_files_path + "/results.txt", 'w') as results_file:
     results_file.write("# AP and precision/recall per class\n")
     count_true_positives = {}
+    # added by HSQ
+    for already_seen_class in already_seen_classes:
+        os.makedirs('./results/images/FP/' + already_seen_class)
     for class_index, class_name in enumerate(gt_classes):
         count_true_positives[class_name] = 0
         """
@@ -648,6 +653,11 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
                 cv2.imwrite(output_img_path, img)
                 # save the image with all the objects drawn to it
                 cv2.imwrite(img_cumulative_path, img_cumulative)
+                # added by HSQ
+                # TODO:可以根据status再从FP中细分
+                if not status == 'MATCH!':
+                    cv2.imwrite('./results/images/FP/' + class_name + '/' + detection['file_id'] + '.jpg',
+                                img_cumulative)
 
         #print(tp)
         # compute precision/recall
@@ -725,6 +735,31 @@ with open(results_files_path + "/results.txt", 'w') as results_file:
     text = "mAP = {0:.2f}%".format(mAP*100)
     results_file.write(text + "\n")
     print(text)
+# added by HSQ
+yellow = (0, 255, 255)
+font = cv2.FONT_HERSHEY_SIMPLEX
+for already_seen_class in already_seen_classes:
+    os.makedirs('./results/images/FN/' + already_seen_class + '/')
+for gt_file_name in os.listdir(TEMP_FILES_PATH + "/"):  # 循环所有图片
+    dst_dirs = []
+    if 'ground_truth' in gt_file_name:
+        ground_truth_data = json.load(open(TEMP_FILES_PATH + "/" + gt_file_name))
+        flag_first_read = True
+        for true_obj in ground_truth_data:  # 循环一张图片里的所有gt
+            if true_obj['used'] == False:
+                bb = [int(i) for i in true_obj['bbox'].split()]
+                class_name = true_obj['class_name']
+
+                if class_name not in dst_dirs:
+                    dst_dirs.append(class_name)
+                if flag_first_read == True:
+                    img = cv2.imread('./results/images/' + gt_file_name[:-18] + '.jpg')
+                    flag_first_read = False
+                cv2.rectangle(img, (bb[0], bb[1]), (bb[2], bb[3]), yellow, 2)
+                cv2.putText(img, class_name, (bb[0], bb[1] - 5), font, 0.6, yellow, 1, cv2.LINE_AA)
+        if flag_first_read == False:  # 图片被读过证明该图有漏检的
+            for dst_dir in dst_dirs:
+                cv2.imwrite('./results/images/FN/' + dst_dir + '/' + gt_file_name[:-18] + '.jpg', img)
 
 # remove the temp_files directory
 shutil.rmtree(TEMP_FILES_PATH)
